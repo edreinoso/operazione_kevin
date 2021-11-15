@@ -47,14 +47,14 @@ public class HelloWorldClient {
 
 
     // set (1,2)
-//    logger.info("Setting (1,2)");
-//    try {
-//      blockingStub.setVal(KeyVal.newBuilder().setK(1).setV(2).build());
-//      //blockingStub.prepare(KeyVal.newBuilder().setK(1).setV(2).build());
-//    } catch (StatusRuntimeException e) {
-//      logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
-//      return;
-//    }
+    logger.info("Setting (1,2)");
+    try {
+      blockingStub.setVal(KeyVal.newBuilder().setK(1).setV(2).build());
+      //blockingStub.prepare(KeyVal.newBuilder().setK(1).setV(2).build());
+    } catch (StatusRuntimeException e) {
+      logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
+      return;
+    }
 
     // get (1)
     logger.info("Getting (1)");
@@ -87,7 +87,7 @@ public class HelloWorldClient {
       }
       user = args[0];
     }
-    logger.info("Greeting: %s" + args[0]);
+
     if (args.length >= 1) {
       target = "localhost:" + args[0];
     }
