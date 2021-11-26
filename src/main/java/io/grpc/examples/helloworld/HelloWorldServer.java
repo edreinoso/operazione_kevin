@@ -21,12 +21,18 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
+import sun.awt.Mutex;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -108,6 +114,8 @@ public class HelloWorldServer {
   static class GreeterImpl extends GreeterGrpc.GreeterImplBase {
 
     ConcurrentHashMap<Long, Long> HT;
+    LinkedBlockingQueue<KeyVal> log;
+    Lock mtx;
 
     // leader node is the first one of the replicas (if we are not the leader)
     ArrayList<GreeterGrpc.GreeterBlockingStub> replicas;
@@ -115,11 +123,15 @@ public class HelloWorldServer {
 
     public GreeterImpl () {
       HT = new ConcurrentHashMap<>();
+      log = new LinkedBlockingQueue<>();
+      mtx = new ReentrantLock();
       leader = true;
     }
 
     public GreeterImpl (int myPort, int firstPort, int lastPort) {
       HT = new ConcurrentHashMap<>();
+      log = new LinkedBlockingQueue<>();
+      mtx = new ReentrantLock();
     }
 
     public void setReplicas(ArrayList<ManagedChannel> chns, boolean leader) {
@@ -133,30 +145,21 @@ public class HelloWorldServer {
     }
 
     @Override
-    public void sayHello(HelloRequest req, StreamObserver<HelloReply> responseObserver) {
-      HelloReply reply = HelloReply.newBuilder().setMessage("Hello " + req.getName()).build();
-      responseObserver.onNext(reply);
-      responseObserver.onCompleted();
-    }
-
-    @Override
-    public void sayHelloAgain(HelloRequest req, StreamObserver<HelloReply> responseObserver) {
-      HelloReply reply = HelloReply.newBuilder().setMessage("Hello again " + req.getName()).build();
-      responseObserver.onNext(reply);
-      responseObserver.onCompleted();
-    }
-
-    @Override
     public void setVal(KeyVal kv, StreamObserver<Val> responseObserver) {
-      HT.put(kv.getK(), kv.getV());
+      mtx.lock();
+      log.add(kv);
+
+      if (leader)
+        coord2PC(kv);
+      mtx.unlock();
       Val v = Val.newBuilder().setV(kv.getV()).build();
 
-      if (!leader) {
-        logger.info("starting 2pc");
-        replicas.get(0).set2PCVal(kv);
-      } else {
-        coord2PC(kv);
-      }
+//      if (!leader) {
+//        logger.info("starting 2pc");
+//        replicas.get(0).set2PCVal(kv);
+//      } else {
+//        coord2PC(kv);
+//      }
 
       responseObserver.onNext(v);
       responseObserver.onCompleted();
@@ -164,25 +167,36 @@ public class HelloWorldServer {
 
     @Override
     public void getVal(Key k, StreamObserver<Val> responseObserver) {
+      mtx.lock();
       long ht_v = HT.get(k.getK());
+      mtx.unlock();
       Val v = Val.newBuilder().setV(ht_v).build();
 
       responseObserver.onNext(v);
       responseObserver.onCompleted();
     }
 
-    private Val coord2PC (KeyVal kv) {
-
+    private Val coord2PC(KeyVal kv) {
       logger.info("coordinating a 2pc thing");
-      for (GreeterGrpc.GreeterBlockingStub replica : replicas) {
-        replica.prepare(kv);
+      ArrayList<KeyVal> arg = new ArrayList<>();
+      while(!log.isEmpty())
+      {
+        try {
+          arg.add(log.take());
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
       }
+
       for (GreeterGrpc.GreeterBlockingStub replica : replicas) {
-        replica.commit(kv);
+        replica.commit(KVList.newBuilder().addAllKvs(arg).build());
       }
 
       // After all committed, we also update our own HT:
-      HT.put(kv.getK(), kv.getV());
+      for(KeyVal arg_kv : arg)
+      {
+        HT.put(arg_kv.getK(), arg_kv.getV());
+      }
       return Val.newBuilder().setV(kv.getV()).build();
     }
 
@@ -203,35 +217,33 @@ public class HelloWorldServer {
     }
 
     // (Replica-only) Prepare
-    @Override
-    public void prepare (KeyVal kv, StreamObserver<Val> responseObserver) {
-      if (leader) {
-        // somebody is trolling us!
-        responseObserver.onNext(Val.newBuilder().setV(0).build());
-        responseObserver.onCompleted();
-        return;
-      }
-      // Do nothing, just respond ok
-      Val v = Val.newBuilder().setV(kv.getV()).build();
-
-      responseObserver.onNext(v);
-      responseObserver.onCompleted();
-    }
+//    @Override
+//    public void prepare (KeyVal kv, StreamObserver<Val> responseObserver) {
+//      if (leader) {
+//        assert(false);
+//        responseObserver.onNext(Val.newBuilder().setV(0).build());
+//        responseObserver.onCompleted();
+//        return;
+//      }
+//      // Do nothing, just respond ok
+//      Val v = Val.newBuilder().setV(kv.getV()).build();
+//
+//      responseObserver.onNext(v);
+//      responseObserver.onCompleted();
+//    }
 
     // (Replica-only) Commit
     @Override
-    public void commit (KeyVal kv, StreamObserver<Val> responseObserver) {
-      if (leader) {
-        // somebody is trolling us!
-        responseObserver.onNext(Val.newBuilder().setV(0).build());
-        responseObserver.onCompleted();
-        return;
+    public void commit (KVList values, StreamObserver<Val> responseObserver) {
+      //logger.info("committing key = " + kv.getK() + " | val = " + kv.getV());
+      mtx.lock();
+      for (KeyVal kv : values.getKvsList())
+      {
+        HT.put(kv.getK(), kv.getV());
       }
-      logger.info("committing key = " + kv.getK() + " | val = " + kv.getV());
-      HT.put(kv.getK(), kv.getV());
-      Val v = Val.newBuilder().setV(kv.getV()).build();
 
-      responseObserver.onNext(v);
+      mtx.unlock();
+      responseObserver.onNext(Val.newBuilder().setV(1).build());
       responseObserver.onCompleted();
     }
 

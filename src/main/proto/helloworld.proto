@@ -36,11 +36,8 @@ service Greeter {
   // (Coordinator-only) Set Value for 2PC
   rpc Set2PCVal (KeyVal) returns (Val) {}
 
-  // (Replica-only) Prepare
-  rpc Prepare (KeyVal) returns (Val) {}
-
   // (Replica-only) Commit
-  rpc Commit (KeyVal) returns (Val) {}
+  rpc Commit (KVList) returns (Val) {}
 
   // Shut Down
   rpc ShutDown (HelloRequest) returns (HelloReply) {}
@@ -57,6 +54,10 @@ message Val {
 message KeyVal {
   uint64 k = 1;
   uint64 v = 2;
+}
+
+message KVList {
+  repeated KeyVal kvs = 4;
 }
 
 // The request message containing the user's name.
