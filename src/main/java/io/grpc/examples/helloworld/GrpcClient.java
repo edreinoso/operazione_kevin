@@ -15,17 +15,31 @@ public class GrpcClient {
 
     private final GreeterGrpc.GreeterBlockingStub blockingStub;
 
-    public GrpcClient(Channel channel) {
+    private int uid;
+
+    private int operation_number;
+
+    public GrpcClient(Channel channel, int uid) {
         // 'channel' here is a Channel, not a ManagedChannel, so it is not this code's responsibility to
         // shut it down.
 
         // Passing Channels to code makes code easier to test and makes it easier to reuse Channels.
         blockingStub = GreeterGrpc.newBlockingStub(channel);
+        this.uid = uid;
+        this.operation_number = 0;
     }
 
-    public void write(long key, long val) {
+    public int get_uid(){
+        return this.uid;
+    }
+
+    public int get_operation_number() {return this.operation_number;}
+
+    public void increment_operation_number() {this.operation_number++;}
+
+    public void write(long key, long val, int uid, int operation_number) {
         // set (key,val)
-        logger.info("Setting (" + key + "," + val + ")");
+        logger.info("Setting (" + key + "," + val + ") --- Server: " + uid + " --- Operation number: " + operation_number);
         try {
             blockingStub.setVal(KeyVal.newBuilder().setK(key).setV(val).build());
         } catch (StatusRuntimeException e) {
@@ -33,9 +47,9 @@ public class GrpcClient {
         }
     }
 
-    public long get(long key) {
+    public long get(long key, int uid, int operation_number) {
         // get (k)
-        logger.info("Getting (" + key + ")");
+        logger.info("Getting (" + key + ") --- Server: " + uid + " --- Operation number:" + operation_number);
         MaybeVal v;
         try {
             v = blockingStub.getVal(Key.newBuilder().setK(key).build());
@@ -46,12 +60,12 @@ public class GrpcClient {
 
         if (v.hasVal())
         {
-            logger.info("Got result (" + key + ", " + v.getVal().getV() +")");
+            logger.info("Got result (" + key + ", " + v.getVal().getV() +") --- Server: " + uid + " --- Operation number: " + operation_number);
             return v.getVal().getV();
         }
         else
         {
-            logger.info("Got result (" + key + ", Empty )");
+            logger.info("Got result (" + key + ", Empty ) --- Server: " + uid + " --- Operation number:" + operation_number);
             return -1;
         }
     }
@@ -60,19 +74,23 @@ public class GrpcClient {
     {
         for (int i = 1; i < clients.size(); ++i)
         {
-            clients.get(i).write(key, val);
+            GrpcClient client = clients.get(i);
+            client.increment_operation_number();
+            client.write(key, val, client.get_uid(), clients.get(i).get_operation_number());
         }
-        clients.get(0).write(key, val);
+        clients.get(0).increment_operation_number();
+        clients.get(0).write(key, val, clients.get(0).get_uid(), clients.get(0).get_operation_number());
     }
 
     public static long get(GrpcClient c, long key)
     {
-        return c.get(key);
+        c.increment_operation_number();
+        return c.get(key, c.get_uid(),c.get_operation_number());
     }
 
     public static void main(String[] args) throws Exception {
         if (args.length > 5) {
-            System.err.println("Usage: [name [server_port_0, server_port_n]");
+            System.err.println("Usage: [name [server_port_0, server_port_n] command (key/value)/(server/key)]");
             System.err.println("");
             System.exit(1);
         }
@@ -89,7 +107,7 @@ public class GrpcClient {
                     .build();
             channels.add(channel);
 
-            clients.add(new GrpcClient(channel));
+            clients.add(new GrpcClient(channel, i));
         }
         String op_type_arg = args[2];
         int op_arg1 = Integer.parseInt(args[3]);
