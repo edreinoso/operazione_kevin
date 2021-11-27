@@ -14,7 +14,7 @@ sh start.sh
 
 ### write a value (hardcoded request code) to server listening on port 9000
 ```
-./build/install/sometest/bin/hello-world-client 9000
+./build/install/sometest/bin/hello-world-client 9000 9002 put 1 2
 ```
 
 
