@@ -22,13 +22,9 @@ package helloworld;
 
 // The greeting service definition.
 service Greeter {
-  // Sends a greeting
-  rpc SayHello (HelloRequest) returns (HelloReply) {}
-  // Sends another greeting
-  rpc SayHelloAgain (HelloRequest) returns (HelloReply) {}
 
   // Get Value for Key
-  rpc GetVal (Key) returns (Val) {}
+  rpc GetVal (Key) returns (MaybeVal) {}
 
   // Set Value for Key
   rpc SetVal (KeyVal) returns (Val) {}
@@ -49,6 +45,10 @@ message Key {
 
 message Val {
   uint64 v = 1;
+}
+
+message MaybeVal {
+  optional Val val = 1;
 }
 
 message KeyVal {

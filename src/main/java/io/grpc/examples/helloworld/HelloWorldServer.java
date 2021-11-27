@@ -166,11 +166,20 @@ public class HelloWorldServer {
     }
 
     @Override
-    public void getVal(Key k, StreamObserver<Val> responseObserver) {
+    public void getVal(Key k, StreamObserver<MaybeVal> responseObserver) {
       mtx.lock();
-      long ht_v = HT.get(k.getK());
+      MaybeVal v;
+      if (HT.containsKey(k.getK()))
+      {
+        long ht_v = HT.get(k.getK());
+        v = MaybeVal.newBuilder().setVal(Val.newBuilder().setV(ht_v)).build();
+      }
+      else
+      {
+        v = MaybeVal.newBuilder().build();
+      }
+
       mtx.unlock();
-      Val v = Val.newBuilder().setV(ht_v).build();
 
       responseObserver.onNext(v);
       responseObserver.onCompleted();
