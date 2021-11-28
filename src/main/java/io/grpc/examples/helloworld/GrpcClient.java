@@ -101,7 +101,7 @@ public class GrpcClient {
         ArrayList<GrpcClient> clients = new ArrayList<>();
         for (int i = first_server; i <= last_server; ++i)
         {
-            String target = "localhost:" + i;
+            String target = "ec2-54-227-2-7.compute-1.amazonaws.com:" + i;
             ManagedChannel channel = ManagedChannelBuilder.forTarget(target)
                     .usePlaintext()
                     .build();
