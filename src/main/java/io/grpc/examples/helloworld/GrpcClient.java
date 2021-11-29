@@ -89,19 +89,20 @@ public class GrpcClient {
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length > 5) {
-            System.err.println("Usage: [name [server_port_0, server_port_n] command (key/value)/(server/key)]");
+        if (args.length > 6) {
+            System.err.println("Usage: [name host [server_port_0, server_port_n] command (key/value)/(server/key)]");
             System.err.println("");
             System.exit(1);
         }
-        int first_server = Integer.parseInt(args[0]);
-        int last_server = Integer.parseInt(args[1]);
+        String host = args[0];
+        int first_server = Integer.parseInt(args[1]);
+        int last_server = Integer.parseInt(args[2]);
 
         ArrayList<ManagedChannel> channels = new ArrayList<>();
         ArrayList<GrpcClient> clients = new ArrayList<>();
         for (int i = first_server; i <= last_server; ++i)
         {
-            String target = "ec2-54-227-2-7.compute-1.amazonaws.com:" + i;
+            String target = host + ":" + i;
             ManagedChannel channel = ManagedChannelBuilder.forTarget(target)
                     .usePlaintext()
                     .build();
@@ -109,9 +110,9 @@ public class GrpcClient {
 
             clients.add(new GrpcClient(channel, i));
         }
-        String op_type_arg = args[2];
-        int op_arg1 = Integer.parseInt(args[3]);
-        int op_arg2 = Integer.parseInt(args[4]);
+        String op_type_arg = args[3];
+        int op_arg1 = Integer.parseInt(args[4]);
+        int op_arg2 = Integer.parseInt(args[5]);
         try {
             if (op_type_arg.equals("put"))
             {
