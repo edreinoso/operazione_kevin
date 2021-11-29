@@ -7,14 +7,13 @@ You need bash, gradle, protoc, protobuf.
 ./gradlew installDist
 ```
 ### launch the servers
-WARNING: run.sh first removes all java processes for convenience - the previously running servers - be sure it is ok for you :)
 ```
 sh start.sh
 ```
 
-### write a value (hardcoded request code) to server listening on port 9000
+### write some values to servers
 ```
-./build/install/sometest/bin/hello-world-client 9000 9002 put 1 2
+./build/install/sometest/bin/key-val-client 9000 9002 ops.txt
 ```
 
 

@@ -1,11 +1,13 @@
-package io.grpc.examples.helloworld;
+package io.kevin;
 
 import io.grpc.Channel;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 
+import java.io.File;
 import java.util.ArrayList;
+import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -13,7 +15,7 @@ import java.util.logging.Logger;
 public class GrpcClient {
     private static final Logger logger = Logger.getLogger(GrpcClient.class.getName());
 
-    private final GreeterGrpc.GreeterBlockingStub blockingStub;
+    private final KeyValServiceGrpc.KeyValServiceBlockingStub blockingStub;
 
     private int uid;
 
@@ -24,18 +26,22 @@ public class GrpcClient {
         // shut it down.
 
         // Passing Channels to code makes code easier to test and makes it easier to reuse Channels.
-        blockingStub = GreeterGrpc.newBlockingStub(channel);
+        blockingStub = KeyValServiceGrpc.newBlockingStub(channel);
         this.uid = uid;
         this.operation_number = 0;
     }
 
-    public int get_uid(){
+    public int get_uid() {
         return this.uid;
     }
 
-    public int get_operation_number() {return this.operation_number;}
+    public int get_operation_number() {
+        return this.operation_number;
+    }
 
-    public void increment_operation_number() {this.operation_number++;}
+    public void increment_operation_number() {
+        this.operation_number++;
+    }
 
     public void write(long key, long val, int uid, int operation_number) {
         // set (key,val)
@@ -55,25 +61,20 @@ public class GrpcClient {
             v = blockingStub.getVal(Key.newBuilder().setK(key).build());
         } catch (StatusRuntimeException e) {
             logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
-            return - 1;
+            return -1;
         }
 
-        if (v.hasVal())
-        {
-            logger.info("Got result (" + key + ", " + v.getVal().getV() +") --- Server: " + uid + " --- Operation number: " + operation_number);
+        if (v.hasVal()) {
+            logger.info("Got result (" + key + ", " + v.getVal().getV() + ") --- Server: " + uid + " --- Operation number: " + operation_number);
             return v.getVal().getV();
-        }
-        else
-        {
+        } else {
             logger.info("Got result (" + key + ", Empty ) --- Server: " + uid + " --- Operation number:" + operation_number);
             return -1;
         }
     }
 
-    public static void write(ArrayList<GrpcClient> clients, long key, long val)
-    {
-        for (int i = 1; i < clients.size(); ++i)
-        {
+    public static void write(ArrayList<GrpcClient> clients, long key, long val) {
+        for (int i = 1; i < clients.size(); ++i) {
             GrpcClient client = clients.get(i);
             client.increment_operation_number();
             client.write(key, val, client.get_uid(), clients.get(i).get_operation_number());
@@ -82,15 +83,46 @@ public class GrpcClient {
         clients.get(0).write(key, val, clients.get(0).get_uid(), clients.get(0).get_operation_number());
     }
 
-    public static long get(GrpcClient c, long key)
-    {
+    public static long get(GrpcClient c, long key) {
         c.increment_operation_number();
-        return c.get(key, c.get_uid(),c.get_operation_number());
+        return c.get(key, c.get_uid(), c.get_operation_number());
+    }
+
+    static void handle_query_file(String query_file, ArrayList<ManagedChannel> channels, ArrayList<GrpcClient> clients) throws Exception {
+        File file_obj = new File(query_file);
+        Scanner reader = new Scanner(file_obj);
+        while (reader.hasNextLine()) {
+            String query = reader.nextLine();
+            String[] words = query.split(" ");
+            String op_type_arg = words[0];
+            int op_arg1 = Integer.parseInt(words[1]);
+            int op_arg2 = Integer.parseInt(words[2]);
+
+            try {
+                if (op_type_arg.equals("put")) {
+                    write(clients, op_arg1, op_arg2);
+                } else {
+                    get(clients.get(op_arg1), op_arg2);
+                }
+            } catch (Exception e) {
+                // ManagedChannels use resources like threads and TCP connections. To prevent leaking these
+                // resources the channel should be shut down when it will no longer be used. If it may be used
+                // again leave it running.
+                for (ManagedChannel c : channels) {
+                    c.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
+                }
+
+                reader.close();
+                return;
+            }
+        }
+
+        reader.close();
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length > 6) {
-            System.err.println("Usage: [name host [server_port_0, server_port_n] command (key/value)/(server/key)]");
+        if (args.length > 4) {
+            System.err.println("Usage: [name host [server_port_0, server_port_n] file_name]");
             System.err.println("");
             System.exit(1);
         }
@@ -100,8 +132,7 @@ public class GrpcClient {
 
         ArrayList<ManagedChannel> channels = new ArrayList<>();
         ArrayList<GrpcClient> clients = new ArrayList<>();
-        for (int i = first_server; i <= last_server; ++i)
-        {
+        for (int i = first_server; i <= last_server; ++i) {
             String target = host + ":" + i;
             ManagedChannel channel = ManagedChannelBuilder.forTarget(target)
                     .usePlaintext()
@@ -110,26 +141,11 @@ public class GrpcClient {
 
             clients.add(new GrpcClient(channel, i));
         }
-        String op_type_arg = args[3];
-        int op_arg1 = Integer.parseInt(args[4]);
-        int op_arg2 = Integer.parseInt(args[5]);
-        try {
-            if (op_type_arg.equals("put"))
-            {
-                write(clients, op_arg1, op_arg2);
-            }
-            else
-            {
-                get(clients.get(op_arg1), op_arg2);
-            }
-        } finally {
-            // ManagedChannels use resources like threads and TCP connections. To prevent leaking these
-            // resources the channel should be shut down when it will no longer be used. If it may be used
-            // again leave it running.
-            for (ManagedChannel c : channels)
-            {
-                c.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
-            }
+        String file_name = args[3];
+        handle_query_file(file_name, channels, clients);
+
+        for (ManagedChannel c : channels) {
+            c.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
         }
     }
 }

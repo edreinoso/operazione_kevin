@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "io.kevin";
+option java_outer_classname = "KevinProto";
+option objc_class_prefix = "HLW";
+
+package kevin;
+
+// The greeting service definition.
+service KeyValService {
+
+  // Get Value for Key
+  rpc GetVal (Key) returns (MaybeVal) {}
+
+  // Set Value for Key
+  rpc SetVal (KeyVal) returns (Val) {}
+
+  // (Coordinator-only) Set Value for 2PC
+  rpc Set2PCVal (KeyVal) returns (Val) {}
+
+  // (Replica-only) Commit
+  rpc Commit (KVList) returns (Val) {}
+}
+
+message Key {
+  uint64 k = 1;
+}
+
+message Val {
+  uint64 v = 1;
+}
+
+message MaybeVal {
+  optional Val val = 1;
+}
+
+message KeyVal {
+  uint64 k = 1;
+  uint64 v = 2;
+}
+
+message KVList {
+  repeated KeyVal kvs = 4;
+}
+
