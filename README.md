@@ -13,7 +13,7 @@ sh start.sh
 
 ### write some values to servers
 ```
-./build/install/sometest/bin/key-val-client 9000 9002 ops.txt
+./build/install/sometest/bin/key-val-client localhost 9000 9002 ops.txt
 ```
 
 
