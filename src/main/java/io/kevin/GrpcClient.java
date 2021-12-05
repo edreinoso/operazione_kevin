@@ -52,9 +52,14 @@ public class GrpcClient {
             logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
         }
     }
-
     public long get(long key, int uid, int operation_number) {
         // get (k)
+        // try {
+        //     TimeUnit.SECONDS.sleep(10);
+        // } catch (InterruptedException e) {
+        //     logger.log(Level.WARNING, "Error in time");
+        // }
+        
         logger.info("Getting (" + key + ") --- Server: " + uid + " --- Operation number:" + operation_number);
         MaybeVal v;
         try {
@@ -73,21 +78,30 @@ public class GrpcClient {
         }
     }
 
-    public static void write(ArrayList<GrpcClient> clients, long key, long val) {
+
+    // this function
+    public static void write(ArrayList<GrpcClient> clients, long key, long val, long delayTime) {
         for (int i = 1; i < clients.size(); ++i) {
             GrpcClient client = clients.get(i);
             client.increment_operation_number();
             client.write(key, val, client.get_uid(), clients.get(i).get_operation_number());
         }
+        try {
+            TimeUnit.SECONDS.sleep(delayTime);
+        } catch (InterruptedException e) {
+            logger.log(Level.WARNING, "Error in time");
+        }
+        // write to coordinator
         clients.get(0).increment_operation_number();
         clients.get(0).write(key, val, clients.get(0).get_uid(), clients.get(0).get_operation_number());
     }
-
+    // this function
     public static long get(GrpcClient c, long key) {
         c.increment_operation_number();
         return c.get(key, c.get_uid(), c.get_operation_number());
     }
 
+    // function that parses the file
     static void handle_query_file(String query_file, ArrayList<ManagedChannel> channels, ArrayList<GrpcClient> clients) throws Exception {
         File file_obj = new File(query_file);
         Scanner reader = new Scanner(file_obj);
@@ -97,10 +111,18 @@ public class GrpcClient {
             String op_type_arg = words[0];
             int op_arg1 = Integer.parseInt(words[1]);
             int op_arg2 = Integer.parseInt(words[2]);
+            int delayTime = Integer.parseInt(words[3]); // out of index
 
             try {
-                if (op_type_arg.equals("put")) {
-                    write(clients, op_arg1, op_arg2);
+                if (op_type_arg.equals("sleep")) {
+                    try {
+                        TimeUnit.SECONDS.sleep(op_arg1);
+                    } catch (InterruptedException e) {
+                        logger.log(Level.WARNING, "Error in time");
+                    }
+                }
+                else if (op_type_arg.equals("put")) {
+                    write(clients, op_arg1, op_arg2, delayTime);
                 } else {
                     get(clients.get(op_arg1), op_arg2);
                 }
