@@ -54,14 +54,17 @@ public class GrpcClient {
     }
     public long get(long key, int uid, int operation_number) {
         // get (k)
-        // try {
-        //     TimeUnit.SECONDS.sleep(10);
-        // } catch (InterruptedException e) {
-        //     logger.log(Level.WARNING, "Error in time");
-        // }
+        try {
+            //System.out.println("time for delay getting operation");
+            TimeUnit.SECONDS.sleep(5);
+        } catch (InterruptedException e) {
+            logger.log(Level.WARNING, "Error in time");
+        }
         
         logger.info("Getting (" + key + ") --- Server: " + uid + " --- Operation number:" + operation_number);
         MaybeVal v;
+
+
         try {
             v = blockingStub.getVal(Key.newBuilder().setK(key).build());
         } catch (StatusRuntimeException e) {
@@ -71,6 +74,8 @@ public class GrpcClient {
 
         if (v.hasVal()) {
             logger.info("Got result (" + key + ", " + v.getVal().getV() + ") --- Server: " + uid + " --- Operation number: " + operation_number);
+            //saveToFile("", ops_output_N.txt); // differentiate among files 
+            System.out.println(v.getVal().getV());
             return v.getVal().getV();
         } else {
             logger.info("Got result (" + key + ", Empty ) --- Server: " + uid + " --- Operation number:" + operation_number);
@@ -87,6 +92,7 @@ public class GrpcClient {
             client.write(key, val, client.get_uid(), clients.get(i).get_operation_number());
         }
         try {
+            //System.out.println("delayTime: " + delayTime);
             TimeUnit.SECONDS.sleep(delayTime);
         } catch (InterruptedException e) {
             logger.log(Level.WARNING, "Error in time");
@@ -116,6 +122,7 @@ public class GrpcClient {
             try {
                 if (op_type_arg.equals("sleep")) {
                     try {
+                        //System.out.println("sleeping operation");
                         TimeUnit.SECONDS.sleep(op_arg1);
                     } catch (InterruptedException e) {
                         logger.log(Level.WARNING, "Error in time");
@@ -124,7 +131,12 @@ public class GrpcClient {
                 else if (op_type_arg.equals("put")) {
                     write(clients, op_arg1, op_arg2, delayTime);
                 } else {
+                    // getting return
                     get(clients.get(op_arg1), op_arg2);
+
+                    // separate java application
+                    // call handle_query_file()
+                    // shell(./build/install/sometest/bin/key-val-client localhost 9100 9102 ops.txt)
                 }
             } catch (Exception e) {
                 // ManagedChannels use resources like threads and TCP connections. To prevent leaking these
