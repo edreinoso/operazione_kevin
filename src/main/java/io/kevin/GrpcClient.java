@@ -54,12 +54,12 @@ public class GrpcClient {
     }
     public long get(long key, int uid, int operation_number) {
         // get (k)
-        try {
-            //System.out.println("time for delay getting operation");
-            TimeUnit.SECONDS.sleep(5);
-        } catch (InterruptedException e) {
-            logger.log(Level.WARNING, "Error in time");
-        }
+//        try {
+//            //System.out.println("time for delay getting operation");
+//            TimeUnit.SECONDS.sleep(5);
+//        } catch (InterruptedException e) {
+//            logger.log(Level.WARNING, "Error in time");
+//        }
         
         logger.info("Getting (" + key + ") --- Server: " + uid + " --- Operation number:" + operation_number);
         MaybeVal v;
