@@ -142,8 +142,6 @@ public class KeyValServer {
             mtx.lock();
             log.add(kv);
 
-            if (leader)
-                coord2PC(kv);
             mtx.unlock();
             Val v = Val.newBuilder().setV(kv.getV()).build();
 
@@ -153,13 +151,23 @@ public class KeyValServer {
 
         @Override
         public void getVal(Key k, StreamObserver<MaybeVal> responseObserver) {
+            MaybeVal v = MaybeVal.newBuilder().build();
+            if (!leader)
+            {
+                System.err.println("Non-coordinator received get -- impossible case");
+
+                responseObserver.onNext(v);
+                responseObserver.onCompleted();
+                return;
+            }
+
             mtx.lock();
-            MaybeVal v;
+
+            coord2PC();
+
             if (HT.containsKey(k.getK())) {
                 long ht_v = HT.get(k.getK());
                 v = MaybeVal.newBuilder().setVal(Val.newBuilder().setV(ht_v)).build();
-            } else {
-                v = MaybeVal.newBuilder().build();
             }
 
             mtx.unlock();
@@ -168,9 +176,14 @@ public class KeyValServer {
             responseObserver.onCompleted();
         }
 
-        private Val coord2PC(KeyVal kv) {
+        private void coord2PC() {
             logger.info("Coordinating a synchronization");
             ArrayList<KeyVal> arg = new ArrayList<>();
+            if (log.isEmpty()) {
+                logger.info("Empty operation log");
+                return;
+            }
+
             while (!log.isEmpty()) {
                 try {
                     arg.add(log.take());
@@ -189,41 +202,7 @@ public class KeyValServer {
             }
 
             logger.info("Finished coordinating the synchronization");
-
-            return Val.newBuilder().setV(kv.getV()).build();
         }
-
-        // (Coordinator-only) Set Value for 2PC
-        @Override
-        public void set2PCVal(KeyVal kv, StreamObserver<Val> responseObserver) {
-            if (!leader) {
-                // somebody is trolling us!
-                responseObserver.onNext(Val.newBuilder().setV(0).build());
-                responseObserver.onCompleted();
-                return;
-            }
-
-            Val v = coord2PC(kv);
-
-            responseObserver.onNext(v);
-            responseObserver.onCompleted();
-        }
-
-        // (Replica-only) Prepare
-//    @Override
-//    public void prepare (KeyVal kv, StreamObserver<Val> responseObserver) {
-//      if (leader) {
-//        assert(false);
-//        responseObserver.onNext(Val.newBuilder().setV(0).build());
-//        responseObserver.onCompleted();
-//        return;
-//      }
-//      // Do nothing, just respond ok
-//      Val v = Val.newBuilder().setV(kv.getV()).build();
-//
-//      responseObserver.onNext(v);
-//      responseObserver.onCompleted();
-//    }
 
         // (Replica-only) Commit
         @Override

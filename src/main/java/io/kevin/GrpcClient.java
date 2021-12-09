@@ -117,7 +117,7 @@ public class GrpcClient {
             String op_type_arg = words[0];
             int op_arg1 = Integer.parseInt(words[1]);
             int op_arg2 = Integer.parseInt(words[2]);
-            int delayTime = Integer.parseInt(words[3]); // out of index
+            int delayTime = Integer.parseInt(words[3]);
 
             try {
                 if (op_type_arg.equals("sleep")) {
@@ -130,13 +130,19 @@ public class GrpcClient {
                 }
                 else if (op_type_arg.equals("put")) {
                     write(clients, op_arg1, op_arg2, delayTime);
-                } else {
+                }
+                else if (op_type_arg.equals("get"))
+                {
                     // getting return
-                    get(clients.get(op_arg1), op_arg2);
+                    get(clients.get(0), op_arg1);
 
                     // separate java application
                     // call handle_query_file()
                     // shell(./build/install/sometest/bin/key-val-client localhost 9100 9102 ops.txt)
+                }
+                else
+                {
+                    System.err.println("Invalid operation - corrupt ops file");
                 }
             } catch (Exception e) {
                 // ManagedChannels use resources like threads and TCP connections. To prevent leaking these
