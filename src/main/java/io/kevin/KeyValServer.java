@@ -39,9 +39,9 @@ public class KeyValServer {
 
     private Server server;
 
-    private void start(int myPort, int firstPort, int lastPort) throws IOException, InterruptedException {
+    private void start(int myPort, int firstPort, int lastPort, String host) throws IOException, InterruptedException {
 
-        keyValImpl gi = new keyValImpl(myPort, firstPort, lastPort);
+        keyValImpl gi = new keyValImpl();
         server = ServerBuilder.forPort(myPort)
                 .addService(gi)
                 .build()
@@ -70,6 +70,11 @@ public class KeyValServer {
             if (i == myPort) continue;
 
             String target = "localhost:" + String.valueOf(i);
+            if (!host.equals("localhost"))
+            {
+                target = host + i + ":9100";
+            }
+
             arr.add(ManagedChannelBuilder.forTarget(target).usePlaintext().build());
         }
 
@@ -98,10 +103,11 @@ public class KeyValServer {
     public static void main(String[] args) throws IOException, InterruptedException {
         final KeyValServer server = new KeyValServer();
 
-        int myport = Integer.parseInt(args[0]);
-        int lowest_port = Integer.parseInt(args[1]);
-        int highest_port = Integer.parseInt(args[2]);
-        server.start(myport, lowest_port, highest_port);
+        String locality = args[0];
+        int myport = Integer.parseInt(args[1]);
+        int lowest_port = Integer.parseInt(args[2]);
+        int highest_port = Integer.parseInt(args[3]);
+        server.start(myport, lowest_port, highest_port, locality);
         server.blockUntilShutdown();
     }
 
@@ -121,7 +127,7 @@ public class KeyValServer {
             return current_id++;
         }
 
-        public keyValImpl(int myPort, int firstPort, int lastPort) {
+        public keyValImpl() {
             HT = new ConcurrentHashMap<>();
             batch_logs = new ConcurrentHashMap<>();
             committed = new ConcurrentHashMap<>();

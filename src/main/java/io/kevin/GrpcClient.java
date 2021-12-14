@@ -193,19 +193,24 @@ public class GrpcClient {
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length > 4) {
-            System.err.println("Usage: [name host [server_port_0, server_port_n] file_name]");
+        if (args.length > 5) {
+            System.err.println("Usage: [name local/remote host [server_port_0, server_port_n] file_name]");
             System.err.println("");
             System.exit(1);
         }
-        String host = args[0];
-        int first_server = Integer.parseInt(args[1]);
-        int last_server = Integer.parseInt(args[2]);
+        String locality = args[0];
+        String host = args[1];
+        int first_server = Integer.parseInt(args[2]);
+        int last_server = Integer.parseInt(args[3]);
 
         ArrayList<ManagedChannel> channels = new ArrayList<>();
         ArrayList<GrpcClient> clients = new ArrayList<>();
         for (int i = first_server; i <= last_server; ++i) {
             String target = host + ":" + i;
+            if(!locality.equals("local"))
+            {
+                target = host + i + ":9100";
+            }
             ManagedChannel channel = ManagedChannelBuilder.forTarget(target)
                     .usePlaintext()
                     .build();
@@ -213,7 +218,7 @@ public class GrpcClient {
 
             clients.add(new GrpcClient(channel, i));
         }
-        String file_name = args[3];
+        String file_name = args[4];
         clients.get(0).set_uid(get_id_from_leader(channels, clients));
         handle_query_file(file_name, channels, clients);
 
