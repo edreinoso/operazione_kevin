@@ -10,8 +10,14 @@ package kevin;
 // The greeting service definition.
 service KeyValService {
 
+  // Get Id for Client
+  rpc GetId (Key) returns (Val) {}
+
+  // Set committed for client
+  rpc SetCommit (Val) returns (Val) {}
+
   // Get Value for Key
-  rpc GetVal (Key) returns (MaybeVal) {}
+  rpc GetVal (KeyList) returns (MaybeValList) {}
 
   // Set Value for Key
   rpc SetVal (KeyVal) returns (Val) {}
@@ -27,6 +33,15 @@ message Key {
   uint64 k = 1;
 }
 
+message KeyList {
+  repeated Key k = 1;
+  uint64 id = 2;
+}
+
+message MaybeValList {
+  repeated MaybeVal val = 1;
+}
+
 message Val {
   uint64 v = 1;
 }
@@ -38,6 +53,7 @@ message MaybeVal {
 message KeyVal {
   uint64 k = 1;
   uint64 v = 2;
+  uint64 id = 3;
 }
 
 message KVList {

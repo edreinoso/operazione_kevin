@@ -24,6 +24,7 @@ import io.grpc.stub.StreamObserver;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -39,9 +40,9 @@ public class KeyValServer {
 
     private Server server;
 
-    private void start(int myPort, int firstPort, int lastPort) throws IOException, InterruptedException {
+    private void start(int myPort, int firstPort, int lastPort, String host) throws IOException, InterruptedException {
 
-        keyValImpl gi = new keyValImpl(myPort, firstPort, lastPort);
+        keyValImpl gi = new keyValImpl();
         server = ServerBuilder.forPort(myPort)
                 .addService(gi)
                 .build()
@@ -70,6 +71,11 @@ public class KeyValServer {
             if (i == myPort) continue;
 
             String target = "localhost:" + String.valueOf(i);
+            if (!host.equals("localhost"))
+            {
+                target = host + i + ":9100";
+            }
+
             arr.add(ManagedChannelBuilder.forTarget(target).usePlaintext().build());
         }
 
@@ -98,33 +104,34 @@ public class KeyValServer {
     public static void main(String[] args) throws IOException, InterruptedException {
         final KeyValServer server = new KeyValServer();
 
-        int myport = Integer.parseInt(args[0]);
-        int lowest_port = Integer.parseInt(args[1]);
-        int highest_port = Integer.parseInt(args[2]);
-        server.start(myport, lowest_port, highest_port);
+        String locality = args[0];
+        int myport = Integer.parseInt(args[1]);
+        int lowest_port = Integer.parseInt(args[2]);
+        int highest_port = Integer.parseInt(args[3]);
+        server.start(myport, lowest_port, highest_port, locality);
         server.blockUntilShutdown();
     }
 
     static class keyValImpl extends KeyValServiceGrpc.KeyValServiceImplBase {
 
         ConcurrentHashMap<Long, Long> HT;
-        LinkedBlockingQueue<KeyVal> log;
+        ConcurrentHashMap<Long, LinkedBlockingQueue<KeyVal>> batch_logs;
+        ConcurrentHashMap<Long, Boolean> committed;
+        long current_id = 0;
         Lock mtx;
 
         // leader node is the first one of the replicas (if we are not the leader)
         ArrayList<KeyValServiceGrpc.KeyValServiceBlockingStub> replicas;
         boolean leader;
 
-        public keyValImpl() {
-            HT = new ConcurrentHashMap<>();
-            log = new LinkedBlockingQueue<>();
-            mtx = new ReentrantLock();
-            leader = true;
+        private synchronized long get_next_id() {
+            return current_id++;
         }
 
-        public keyValImpl(int myPort, int firstPort, int lastPort) {
+        public keyValImpl() {
             HT = new ConcurrentHashMap<>();
-            log = new LinkedBlockingQueue<>();
+            batch_logs = new ConcurrentHashMap<>();
+            committed = new ConcurrentHashMap<>();
             mtx = new ReentrantLock();
         }
 
@@ -140,7 +147,15 @@ public class KeyValServer {
         @Override
         public void setVal(KeyVal kv, StreamObserver<Val> responseObserver) {
             mtx.lock();
-            log.add(kv);
+            if (!batch_logs.containsKey(kv.getId()))
+            {
+                batch_logs.put(kv.getId(), new LinkedBlockingQueue<>());
+            }
+            if (!committed.containsKey(kv.getId()))
+            {
+                committed.put(kv.getId(), false);
+            }
+            batch_logs.get(kv.getId()).add(kv);
 
             mtx.unlock();
             Val v = Val.newBuilder().setV(kv.getV()).build();
@@ -150,46 +165,78 @@ public class KeyValServer {
         }
 
         @Override
-        public void getVal(Key k, StreamObserver<MaybeVal> responseObserver) {
-            MaybeVal v = MaybeVal.newBuilder().build();
+        public void getId(Key k, StreamObserver<Val> responseObserver) {
+            Val v = Val.newBuilder().build();
+
+            if (leader) {
+                v = Val.newBuilder().setV(get_next_id()).build();
+            }
+
+            responseObserver.onNext(v);
+            responseObserver.onCompleted();
+        }
+
+        @Override
+        public void setCommit(Val id, StreamObserver<Val> responseObserver) {
+            long cl_id = id.getV();
+            mtx.lock();
+            committed.put(cl_id, true);
+
+            mtx.unlock();
+
+            responseObserver.onNext(Val.newBuilder().build());
+            responseObserver.onCompleted();
+        }
+
+        @Override
+        public void getVal(KeyList kl, StreamObserver<MaybeValList> responseObserver) {
+            MaybeValList.Builder mvl = MaybeValList.newBuilder();
             if (!leader)
             {
                 System.err.println("Non-coordinator received get -- impossible case");
 
-                responseObserver.onNext(v);
+                responseObserver.onNext(mvl.build());
                 responseObserver.onCompleted();
                 return;
             }
 
             mtx.lock();
 
-            coord2PC();
+            coord2PC(kl.getId());
 
-            if (HT.containsKey(k.getK())) {
-                long ht_v = HT.get(k.getK());
-                v = MaybeVal.newBuilder().setVal(Val.newBuilder().setV(ht_v)).build();
+            for (Key k : kl.getKList())
+            {
+                if (HT.containsKey(k.getK()))
+                {
+                    long ht_v = HT.get(k.getK());
+                    mvl.addVal(MaybeVal.newBuilder().setVal(Val.newBuilder().setV(ht_v)).build());
+                }
+                else
+                {
+                    mvl.addVal(MaybeVal.newBuilder().build());
+                }
             }
 
             mtx.unlock();
 
-            responseObserver.onNext(v);
+            responseObserver.onNext(mvl.build());
             responseObserver.onCompleted();
         }
 
-        private void coord2PC() {
+        private void coord2PC(long id) {
             logger.info("Coordinating a synchronization");
             ArrayList<KeyVal> arg = new ArrayList<>();
-            if (log.isEmpty()) {
-                logger.info("Empty operation log");
-                return;
-            }
+            ArrayList<Long> ids = new ArrayList<>();
 
-            while (!log.isEmpty()) {
-                try {
-                    arg.add(log.take());
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+            for (Map.Entry<Long, LinkedBlockingQueue<KeyVal>> e : batch_logs.entrySet())
+            {
+                if (!committed.containsKey(e.getKey()) || !committed.get(e.getKey()))
+                {
+                    // skip uncommitted batches
+                    continue;
                 }
+                arg.addAll(e.getValue());
+                ids.add(e.getKey());
             }
 
             for (KeyValServiceGrpc.KeyValServiceBlockingStub replica : replicas) {
@@ -199,6 +246,13 @@ public class KeyValServer {
             // After all committed, we also update our own HT:
             for (KeyVal arg_kv : arg) {
                 HT.put(arg_kv.getK(), arg_kv.getV());
+            }
+
+            // TODO: try to avoid removing this while blocked
+            for (Long iD : ids)
+            {
+                batch_logs.remove(iD);
+                committed.remove(iD);
             }
 
             logger.info("Finished coordinating the synchronization");
@@ -211,6 +265,23 @@ public class KeyValServer {
             mtx.lock();
             for (KeyVal kv : values.getKvsList()) {
                 HT.put(kv.getK(), kv.getV());
+            }
+
+            ArrayList<Long> ids = new ArrayList<>();
+
+            // TODO: try to avoid removing this while blocked
+            for (Map.Entry<Long, LinkedBlockingQueue<KeyVal>> e : batch_logs.entrySet())
+            {
+                if (committed.containsKey(e.getKey()))
+                {
+                    ids.add(e.getKey());
+                }
+            }
+
+            for (Long iD : ids)
+            {
+                batch_logs.remove(iD);
+                committed.remove(iD);
             }
 
             mtx.unlock();
