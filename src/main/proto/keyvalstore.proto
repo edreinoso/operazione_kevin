@@ -13,11 +13,11 @@ service KeyValService {
   // Get Id for Client
   rpc GetId (Key) returns (Val) {}
 
-  // Set commited for client
+  // Set committed for client
   rpc SetCommit (Val) returns (Val) {}
 
   // Get Value for Key
-  rpc GetVal (Key) returns (MaybeVal) {}
+  rpc GetVal (KeyList) returns (MaybeValList) {}
 
   // Set Value for Key
   rpc SetVal (KeyVal) returns (Val) {}
@@ -31,6 +31,14 @@ service KeyValService {
 
 message Key {
   uint64 k = 1;
+}
+
+message KeyList {
+  repeated Key k = 1;
+}
+
+message MaybeValList {
+  repeated MaybeVal val = 1;
 }
 
 message Val {

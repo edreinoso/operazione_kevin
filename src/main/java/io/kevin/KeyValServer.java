@@ -178,19 +178,23 @@ public class KeyValServer {
         }
 
         @Override
-        public void getVal(Key k, StreamObserver<MaybeVal> responseObserver) {
+        public void getVal(KeyList k, StreamObserver<MaybeValList> responseObserver) {
             mtx.lock();
-            MaybeVal v;
-            if (HT.containsKey(k.getK())) {
-                long ht_v = HT.get(k.getK());
-                v = MaybeVal.newBuilder().setVal(Val.newBuilder().setV(ht_v)).build();
-            } else {
-                v = MaybeVal.newBuilder().build();
+            MaybeValList.Builder mvl = MaybeValList.newBuilder();
+
+            for (Key key : k.getKList())
+            {
+                if (HT.containsKey(key.getK())) {
+                    long ht_v = HT.get(key.getK());
+                    mvl.addVal(MaybeVal.newBuilder().setVal(Val.newBuilder().setV(ht_v)).build());
+                } else {
+                    mvl.addVal(MaybeVal.newBuilder().build());
+                }
             }
 
             mtx.unlock();
 
-            responseObserver.onNext(v);
+            responseObserver.onNext(mvl.build());
             responseObserver.onCompleted();
         }
 

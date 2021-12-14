@@ -63,27 +63,27 @@ public class GrpcClient {
         return id.getV();
     }
 
-    public long get(long key, long uid, int operation_number) {
-        
-        logger.info("Getting (" + key + ") --- Server: " + uid + " --- Operation number:" + operation_number);
-        MaybeVal v;
-
+    public void get(KeyList kl, int operation_number) {
+        //logger.info("Getting (" + kl.toString() + ") --- Server: " + uid + " --- Operation number:" + operation_number);
+        MaybeValList mvl;
 
         try {
-            v = blockingStub.getVal(Key.newBuilder().setK(key).build());
+            mvl = blockingStub.getVal(kl);
         } catch (StatusRuntimeException e) {
             logger.log(Level.WARNING, "RPC failed: {0}", e.getStatus());
-            return -1;
+            return;
         }
 
-        if (v.hasVal()) {
-            logger.info("Got result (" + key + ", " + v.getVal().getV() + ") --- Server: " + uid + " --- Operation number: " + operation_number);
-            //saveToFile("", ops_output_N.txt); // differentiate among files 
-            System.out.println(v.getVal().getV());
-            return v.getVal().getV();
-        } else {
-            logger.info("Got result (" + key + ", Empty ) --- Server: " + uid + " --- Operation number:" + operation_number);
-            return -1;
+        for (int i = 0; i < kl.getKList().size(); ++i)
+        {
+            MaybeVal mv = mvl.getValList().get(i);
+            Key key = kl.getKList().get(i);
+            if (mv.hasVal()) {
+                logger.info("Got result (" + key.getK() + ", " + mv.getVal().getV() + ") --- Server: " + uid + " --- Operation number: " + operation_number);
+                System.out.println(mv.getVal().getV());
+            } else {
+                logger.info("Got result (" + key.getK() + ", Empty ) --- Server: " + uid + " --- Operation number:" + operation_number);
+            }
         }
     }
 
@@ -104,13 +104,21 @@ public class GrpcClient {
         clients.get(0).write(key, val, clients.get(0).get_uid(), clients.get(0).get_operation_number());
     }
 
-    public static long get(GrpcClient c, long key) {
+    public static void get(GrpcClient c, KeyList kl) {
         c.increment_operation_number();
-        return c.get(key, c.get_uid(), c.get_operation_number());
+        c.get(kl, c.get_operation_number());
     }
 
     static long get_id_from_leader(ArrayList<ManagedChannel> channels, ArrayList<GrpcClient> clients) throws Exception {
         return clients.get(0).get_id();
+    }
+
+    enum operation_type
+    {
+        GET,
+        PUT,
+        SLEEP,
+        NOOP
     }
 
     // function that parses the file
@@ -120,7 +128,7 @@ public class GrpcClient {
         while (reader.hasNextLine()) {
             String query = reader.nextLine();
             String[] operations = query.split(";");
-            boolean put_operations = false;
+            operation_type operation_t = operation_type.NOOP;
 
             for (String operation : operations)
             {
@@ -130,25 +138,28 @@ public class GrpcClient {
                 int op_arg2 = Integer.parseInt(words[2]);
                 int delayTime = Integer.parseInt(words[3]); // out of index
 
+                KeyList.Builder kl = KeyList.newBuilder();
+                int server_num = -1;
+
                 try {
                     if (op_type_arg.equals("sleep")) {
                         try {
                             //System.out.println("sleeping operation");
+                            operation_t = operation_type.SLEEP;
                             TimeUnit.SECONDS.sleep(op_arg1);
+
                         } catch (InterruptedException e) {
                             logger.log(Level.WARNING, "Error in time");
                         }
                     }
                     else if (op_type_arg.equals("put")) {
-                        put_operations = true;
+                        operation_t = operation_type.PUT;
                         write(clients, op_arg1, op_arg2, delayTime);
                     } else {
                         // getting return
-                        get(clients.get(op_arg1), op_arg2);
-
-                        // separate java application
-                        // call handle_query_file()
-                        // shell(./build/install/sometest/bin/key-val-client localhost 9100 9102 ops.txt)
+                        kl.addK(Key.newBuilder().setK(op_arg2));
+                        server_num = op_arg1;
+                        operation_t = operation_type.GET;
                     }
                 } catch (Exception e) {
                     // ManagedChannels use resources like threads and TCP connections. To prevent leaking these
@@ -161,14 +172,21 @@ public class GrpcClient {
                     reader.close();
                     return;
                 }
-            }
 
-            if (put_operations)
-            {
-                // We had put operations -> we need to commit at the end and notify coordinator we have pushed our full batch of operations
-                clients.get(0).blockingStub.setCommit(Val.newBuilder().setV(clients.get(0).get_uid()).build());
+                switch(operation_t)
+                {
+                    case PUT:
+                        // We had put operations -> we need to commit at the end and notify coordinator we have pushed our full batch of operations
+                        clients.get(0).blockingStub.setCommit(Val.newBuilder().setV(clients.get(0).get_uid()).build());
+                        break;
+                    case GET:
+                        get(clients.get(server_num), kl.build());
+                        break;
+                    case SLEEP:
+                    default:
+                        break;
+                }
             }
-
         }
 
         reader.close();
