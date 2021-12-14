@@ -108,23 +108,23 @@ public class KeyValServer {
     static class keyValImpl extends KeyValServiceGrpc.KeyValServiceImplBase {
 
         ConcurrentHashMap<Long, Long> HT;
-        LinkedBlockingQueue<KeyVal> log;
+        ConcurrentHashMap<Long, LinkedBlockingQueue<KeyVal>> batch_logs;
+        ConcurrentHashMap<Long, Boolean> committed;
+        long current_id = 0;
         Lock mtx;
 
         // leader node is the first one of the replicas (if we are not the leader)
         ArrayList<KeyValServiceGrpc.KeyValServiceBlockingStub> replicas;
         boolean leader;
 
-        public keyValImpl() {
-            HT = new ConcurrentHashMap<>();
-            log = new LinkedBlockingQueue<>();
-            mtx = new ReentrantLock();
-            leader = true;
+        private synchronized long get_next_id() {
+            return current_id++;
         }
 
         public keyValImpl(int myPort, int firstPort, int lastPort) {
             HT = new ConcurrentHashMap<>();
-            log = new LinkedBlockingQueue<>();
+            batch_logs = new ConcurrentHashMap<>();
+            committed = new ConcurrentHashMap<>();
             mtx = new ReentrantLock();
         }
 
@@ -140,14 +140,40 @@ public class KeyValServer {
         @Override
         public void setVal(KeyVal kv, StreamObserver<Val> responseObserver) {
             mtx.lock();
-            log.add(kv);
 
-            if (leader)
-                coord2PC(kv);
+            if (!batch_logs.containsKey(kv.getId()))
+                batch_logs.put(kv.getId(), new LinkedBlockingQueue<>());
+            batch_logs.get(kv.getId()).add(kv);
             mtx.unlock();
             Val v = Val.newBuilder().setV(kv.getV()).build();
 
             responseObserver.onNext(v);
+            responseObserver.onCompleted();
+        }
+
+        @Override
+        public void getId(Key k, StreamObserver<Val> responseObserver) {
+            Val v = Val.newBuilder().build();
+
+            if (leader) {
+                v = Val.newBuilder().setV(get_next_id()).build();
+            }
+
+            responseObserver.onNext(v);
+            responseObserver.onCompleted();
+        }
+
+        @Override
+        public void setCommit(Val id, StreamObserver<Val> responseObserver) {
+            long cl_id = id.getV();
+            mtx.lock();
+            committed.put(cl_id, true);
+
+            if (leader)
+                coord2PC(KeyVal.newBuilder().build(), id.getV());
+            mtx.unlock();
+
+            responseObserver.onNext(Val.newBuilder().build());
             responseObserver.onCompleted();
         }
 
@@ -168,9 +194,10 @@ public class KeyValServer {
             responseObserver.onCompleted();
         }
 
-        private Val coord2PC(KeyVal kv) {
+        private Val coord2PC(KeyVal kv, long id) {
             logger.info("Coordinating a synchronization");
             ArrayList<KeyVal> arg = new ArrayList<>();
+            LinkedBlockingQueue<KeyVal> log = batch_logs.get(id);
             while (!log.isEmpty()) {
                 try {
                     arg.add(log.take());
@@ -188,42 +215,13 @@ public class KeyValServer {
                 HT.put(arg_kv.getK(), arg_kv.getV());
             }
 
+            batch_logs.remove(id);
+            committed.remove(id);
+
             logger.info("Finished coordinating the synchronization");
 
             return Val.newBuilder().setV(kv.getV()).build();
         }
-
-        // (Coordinator-only) Set Value for 2PC
-        @Override
-        public void set2PCVal(KeyVal kv, StreamObserver<Val> responseObserver) {
-            if (!leader) {
-                // somebody is trolling us!
-                responseObserver.onNext(Val.newBuilder().setV(0).build());
-                responseObserver.onCompleted();
-                return;
-            }
-
-            Val v = coord2PC(kv);
-
-            responseObserver.onNext(v);
-            responseObserver.onCompleted();
-        }
-
-        // (Replica-only) Prepare
-//    @Override
-//    public void prepare (KeyVal kv, StreamObserver<Val> responseObserver) {
-//      if (leader) {
-//        assert(false);
-//        responseObserver.onNext(Val.newBuilder().setV(0).build());
-//        responseObserver.onCompleted();
-//        return;
-//      }
-//      // Do nothing, just respond ok
-//      Val v = Val.newBuilder().setV(kv.getV()).build();
-//
-//      responseObserver.onNext(v);
-//      responseObserver.onCompleted();
-//    }
 
         // (Replica-only) Commit
         @Override
