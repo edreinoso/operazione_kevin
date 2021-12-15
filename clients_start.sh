@@ -1,6 +1,6 @@
 
-./build/install/sometest/bin/key-val-client local localhost 9100 9102 ops.txt &
-./build/install/sometest/bin/key-val-client local localhost 9100 9102 ops2.txt &
+./build/install/sometest/bin/key-val-client topo.txt ops.txt &
+./build/install/sometest/bin/key-val-client topo.txt ops2.txt
 # ./build/install/sometest/bin/key-val-client localhost 9100 9102 ops3.txt &
 # ./build/install/sometest/bin/key-val-client localhost 9000 9002 ops.txt &
 

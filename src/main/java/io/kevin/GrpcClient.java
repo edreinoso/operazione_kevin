@@ -21,7 +21,7 @@ public class GrpcClient {
 
     private int operation_number;
 
-    public GrpcClient(Channel channel, int uid) {
+    public public GrpcClient(Channel channel) {
         // 'channel' here is a Channel, not a ManagedChannel, so it is not this code's responsibility to
         // shut it down.
 
@@ -194,32 +194,33 @@ public class GrpcClient {
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length > 5) {
+        if (args.length != 2) {
             System.err.println("Usage: [name local/remote host [server_port_0, server_port_n] file_name]");
             System.err.println("");
             System.exit(1);
         }
-        String locality = args[0];
-        String host = args[1];
-        int first_server = Integer.parseInt(args[2]);
-        int last_server = Integer.parseInt(args[3]);
+        String topo_file_name = args[0];
 
+        TopoConf conf;
+        try {
+            conf = new TopoConf(topo_file_name, -1);
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.exit(1);
+            return;
+        }
         ArrayList<ManagedChannel> channels = new ArrayList<>();
         ArrayList<GrpcClient> clients = new ArrayList<>();
-        for (int i = first_server; i <= last_server; ++i) {
-            String target = host + ":" + i;
-            if(!locality.equals("local"))
-            {
-                target = host + i + ":9100";
-            }
+
+        for (String target : conf.get_targets()) {
             ManagedChannel channel = ManagedChannelBuilder.forTarget(target)
                     .usePlaintext()
                     .build();
             channels.add(channel);
 
-            clients.add(new GrpcClient(channel, i));
+            clients.add(new GrpcClient(channel));
         }
-        String file_name = args[4];
+        String file_name = args[1];
         clients.get(0).set_uid(get_id_from_leader(channels, clients));
         handle_query_file(file_name, channels, clients);
 

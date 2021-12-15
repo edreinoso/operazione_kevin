@@ -40,9 +40,10 @@ public class KeyValServer {
 
     private Server server;
 
-    private void start(int myPort, int firstPort, int lastPort, String host) throws IOException, InterruptedException {
+    private void start(TopoConf conf) throws IOException, InterruptedException {
 
         keyValImpl gi = new keyValImpl();
+        int myPort = conf.port_from_target(conf.get_targets().get(conf.get_my_idx()));
         server = ServerBuilder.forPort(myPort)
                 .addService(gi)
                 .build()
@@ -63,24 +64,17 @@ public class KeyValServer {
         });
 
         // hacky: wait for all to get setup:
-        TimeUnit.SECONDS.sleep(2);
+        TimeUnit.SECONDS.sleep(4);
 
         ArrayList<ManagedChannel> arr = new ArrayList<>();
-        for (int i = firstPort; i <= lastPort; ++i) {
-            // skip ourselves
-            if (i == myPort) continue;
-
-            String target = "localhost:" + String.valueOf(i);
-            if (!host.equals("localhost"))
-            {
-                target = host + i + ":9100";
-            }
-
+        for (int i = 0; i < conf.get_targets().size(); ++i)
+        {
+            if (i == conf.get_my_idx())
+                continue;
+            String target = conf.get_targets().get(i);
             arr.add(ManagedChannelBuilder.forTarget(target).usePlaintext().build());
         }
-
-        gi.setReplicas(arr, myPort == firstPort);
-
+        gi.setReplicas(arr, conf.get_my_idx() == 0);
     }
 
     private void stop() throws InterruptedException {
@@ -104,11 +98,18 @@ public class KeyValServer {
     public static void main(String[] args) throws IOException, InterruptedException {
         final KeyValServer server = new KeyValServer();
 
-        String locality = args[0];
-        int myport = Integer.parseInt(args[1]);
-        int lowest_port = Integer.parseInt(args[2]);
-        int highest_port = Integer.parseInt(args[3]);
-        server.start(myport, lowest_port, highest_port, locality);
+        String topo_file_name = args[0];
+        int my_idx = Integer.parseInt(args[1]);
+
+        TopoConf conf;
+        try{
+            conf = new TopoConf(topo_file_name, my_idx);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return;
+        }
+
+        server.start(conf);
         server.blockUntilShutdown();
     }
 
