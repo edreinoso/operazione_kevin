@@ -29,6 +29,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -206,7 +207,7 @@ public class KeyValServer {
         }
 
         private Val coord2PC(KeyVal kv, long id) {
-            logger.info("Coordinating a synchronization");
+            logger.log(Level.SEVERE,"Coordinating a synchronization");
             ArrayList<KeyVal> arg = new ArrayList<>();
             LinkedBlockingQueue<KeyVal> log = batch_logs.get(id);
             while (!log.isEmpty()) {

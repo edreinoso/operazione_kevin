@@ -149,7 +149,7 @@ public class GrpcClient {
                             TimeUnit.SECONDS.sleep(op_arg1);
 
                         } catch (InterruptedException e) {
-                            logger.log(Level.WARNING, "Error in time");
+                            logger.log(Level.SEVERE, "Error in time");
                         }
                     }
                     else if (op_type_arg.equals("put")) {
