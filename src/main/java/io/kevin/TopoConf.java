@@ -18,19 +18,16 @@ public class TopoConf {
         my_index = idx;
     }
 
-    public int port_from_target(String target)
-    {
+    public int port_from_target(String target) {
         String[] words = target.split(":");
         return Integer.parseInt(words[1]);
     }
 
-    public ArrayList<String> get_targets()
-    {
+    public ArrayList<String> get_targets() {
         return targets;
     }
 
-    public int get_my_idx()
-    {
+    public int get_my_idx() {
         return my_index;
     }
 }

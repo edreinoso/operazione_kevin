@@ -1,19 +1,3 @@
-/*
- * Copyright 2015 The gRPC Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.kevin;
 
 import io.grpc.ManagedChannel;
@@ -67,8 +51,7 @@ public class KeyValServer {
         TimeUnit.SECONDS.sleep(4);
 
         ArrayList<ManagedChannel> arr = new ArrayList<>();
-        for (int i = 0; i < conf.get_targets().size(); ++i)
-        {
+        for (int i = 0; i < conf.get_targets().size(); ++i) {
             if (i == conf.get_my_idx())
                 continue;
             String target = conf.get_targets().get(i);
@@ -104,7 +87,7 @@ public class KeyValServer {
         int my_idx = Integer.parseInt(args[1]);
 
         TopoConf conf;
-        try{
+        try {
             conf = new TopoConf(topo_file_name, my_idx);
         } catch (Exception e) {
             e.printStackTrace();
@@ -200,8 +183,7 @@ public class KeyValServer {
             mtx.lock();
             MaybeValList.Builder mvl = MaybeValList.newBuilder();
 
-            for (Key key : k.getKList())
-            {
+            for (Key key : k.getKList()) {
                 if (HT.containsKey(key.getK())) {
                     long ht_v = HT.get(key.getK());
                     mvl.addVal(MaybeVal.newBuilder().setVal(Val.newBuilder().setV(ht_v)).build());
@@ -217,7 +199,7 @@ public class KeyValServer {
         }
 
         private Val coord2PC(KeyVal kv, long id) {
-            logger.log(Level.SEVERE,"Coordinating a synchronization");
+            logger.log(Level.SEVERE, "Coordinating a synchronization");
             ArrayList<KeyVal> arg = new ArrayList<>();
             LinkedBlockingQueue<KeyVal> log = batch_logs.get(id);
             while (!log.isEmpty()) {

@@ -74,8 +74,7 @@ public class GrpcClient {
             return;
         }
 
-        for (int i = 0; i < kl.getKList().size(); ++i)
-        {
+        for (int i = 0; i < kl.getKList().size(); ++i) {
             MaybeVal mv = mvl.getValList().get(i);
             Key key = kl.getKList().get(i);
             if (mv.hasVal()) {
@@ -113,8 +112,7 @@ public class GrpcClient {
         return clients.get(0).get_id();
     }
 
-    enum operation_type
-    {
+    enum operation_type {
         GET,
         PUT,
         SLEEP,
@@ -132,8 +130,7 @@ public class GrpcClient {
             int server_num = -1;
             KeyList.Builder kl = KeyList.newBuilder();
 
-            for (String operation : operations)
-            {
+            for (String operation : operations) {
                 String[] words = operation.split(" ");
                 String op_type_arg = words[0];
                 int op_arg1 = Integer.parseInt(words[1]);
@@ -150,8 +147,7 @@ public class GrpcClient {
                         } catch (InterruptedException e) {
                             logger.log(Level.SEVERE, "Error in time");
                         }
-                    }
-                    else if (op_type_arg.equals("put")) {
+                    } else if (op_type_arg.equals("put")) {
                         operation_t = operation_type.PUT;
                         write(clients, op_arg1, op_arg2, delayTime);
                     } else {
@@ -173,8 +169,7 @@ public class GrpcClient {
                 }
             }
 
-            switch(operation_t)
-            {
+            switch (operation_t) {
                 case PUT:
                     // We had put operations -> we need to commit at the end and notify coordinator we have pushed our full batch of operations
                     clients.get(0).blockingStub.setCommit(Val.newBuilder().setV(clients.get(0).get_uid()).build());
