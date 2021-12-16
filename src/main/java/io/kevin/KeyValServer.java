@@ -75,6 +75,8 @@ public class KeyValServer {
             arr.add(ManagedChannelBuilder.forTarget(target).usePlaintext().build());
         }
         gi.setReplicas(arr, conf.get_my_idx() == 0);
+
+        logger.info("Replicas started and set up");
     }
 
     private void stop() throws InterruptedException {
@@ -147,6 +149,7 @@ public class KeyValServer {
 
         @Override
         public void setVal(KeyVal kv, StreamObserver<Val> responseObserver) {
+            logger.info("setVal");
             mtx.lock();
 
             if (!batch_logs.containsKey(kv.getId()))
@@ -161,6 +164,7 @@ public class KeyValServer {
 
         @Override
         public void getId(Key k, StreamObserver<Val> responseObserver) {
+            logger.info("getId");
             Val v = Val.newBuilder().build();
 
             if (leader) {
@@ -173,6 +177,7 @@ public class KeyValServer {
 
         @Override
         public void setCommit(Val id, StreamObserver<Val> responseObserver) {
+            logger.info("setCommit request");
             long cl_id = id.getV();
             mtx.lock();
             committed.put(cl_id, true);
@@ -187,6 +192,7 @@ public class KeyValServer {
 
         @Override
         public void getVal(KeyList k, StreamObserver<MaybeValList> responseObserver) {
+            logger.info("getVal received");
             mtx.lock();
             MaybeValList.Builder mvl = MaybeValList.newBuilder();
 
