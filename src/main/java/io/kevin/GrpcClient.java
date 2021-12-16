@@ -129,6 +129,8 @@ public class GrpcClient {
             String query = reader.nextLine();
             String[] operations = query.split(";");
             operation_type operation_t = operation_type.NOOP;
+            int server_num = -1;
+            KeyList.Builder kl = KeyList.newBuilder();
 
             for (String operation : operations)
             {
@@ -137,9 +139,6 @@ public class GrpcClient {
                 int op_arg1 = Integer.parseInt(words[1]);
                 int op_arg2 = Integer.parseInt(words[2]);
                 int delayTime = Integer.parseInt(words[3]); // out of index
-
-                KeyList.Builder kl = KeyList.newBuilder();
-                int server_num = -1;
 
                 try {
                     if (op_type_arg.equals("sleep")) {
@@ -172,20 +171,20 @@ public class GrpcClient {
                     reader.close();
                     return;
                 }
+            }
 
-                switch(operation_t)
-                {
-                    case PUT:
-                        // We had put operations -> we need to commit at the end and notify coordinator we have pushed our full batch of operations
-                        clients.get(0).blockingStub.setCommit(Val.newBuilder().setV(clients.get(0).get_uid()).build());
-                        break;
-                    case GET:
-                        get(clients.get(server_num), kl.build());
-                        break;
-                    case SLEEP:
-                    default:
-                        break;
-                }
+            switch(operation_t)
+            {
+                case PUT:
+                    // We had put operations -> we need to commit at the end and notify coordinator we have pushed our full batch of operations
+                    clients.get(0).blockingStub.setCommit(Val.newBuilder().setV(clients.get(0).get_uid()).build());
+                    break;
+                case GET:
+                    get(clients.get(server_num), kl.build());
+                    break;
+                case SLEEP:
+                default:
+                    break;
             }
         }
 
