@@ -21,7 +21,7 @@ public class GrpcClient {
 
     private int operation_number;
 
-    public public GrpcClient(Channel channel) {
+    public GrpcClient(Channel channel) {
         // 'channel' here is a Channel, not a ManagedChannel, so it is not this code's responsibility to
         // shut it down.
 
@@ -74,8 +74,7 @@ public class GrpcClient {
             return;
         }
 
-        for (int i = 0; i < kl.getKList().size(); ++i)
-        {
+        for (int i = 0; i < kl.getKList().size(); ++i) {
             MaybeVal mv = mvl.getValList().get(i);
             Key key = kl.getKList().get(i);
             if (mv.hasVal()) {
@@ -113,8 +112,7 @@ public class GrpcClient {
         return clients.get(0).get_id();
     }
 
-    enum operation_type
-    {
+    enum operation_type {
         GET,
         PUT,
         SLEEP,
@@ -130,16 +128,15 @@ public class GrpcClient {
             String[] operations = query.split(";");
             operation_type operation_t = operation_type.NOOP;
 
-            for (String operation : operations)
-            {
+            KeyList.Builder kl = KeyList.newBuilder();
+            int server_num = 0;
+
+            for (String operation : operations) {
                 String[] words = operation.split(" ");
                 String op_type_arg = words[0];
                 int op_arg1 = Integer.parseInt(words[1]);
                 int op_arg2 = Integer.parseInt(words[2]);
-                int delayTime = Integer.parseInt(words[3]); // out of index
-
-                KeyList.Builder kl = KeyList.newBuilder();
-                int server_num = 0;
+                int delayTime = Integer.parseInt(words[3]);
 
                 try {
                     if (op_type_arg.equals("sleep")) {
@@ -151,8 +148,7 @@ public class GrpcClient {
                         } catch (InterruptedException e) {
                             logger.log(Level.WARNING, "Error in time");
                         }
-                    }
-                    else if (op_type_arg.equals("put")) {
+                    } else if (op_type_arg.equals("put")) {
                         operation_t = operation_type.PUT;
                         write(clients, op_arg1, op_arg2, delayTime);
                     } else {
@@ -173,20 +169,19 @@ public class GrpcClient {
                     reader.close();
                     return;
                 }
+            }
 
-                switch(operation_t)
-                {
-                    case PUT:
-                        // We had put operations -> we need to commit at the end and notify coordinator we have pushed our full batch of operations
-                        clients.get(0).blockingStub.setCommit(Val.newBuilder().setV(clients.get(0).get_uid()).build());
-                        break;
-                    case GET:
-                        get(clients.get(server_num), kl.build());
-                        break;
-                    case SLEEP:
-                    default:
-                        break;
-                }
+            switch (operation_t) {
+                case PUT:
+                    // We had put operations -> we need to commit at the end and notify coordinator we have pushed our full batch of operations
+                    clients.get(0).blockingStub.setCommit(Val.newBuilder().setV(clients.get(0).get_uid()).build());
+                    break;
+                case GET:
+                    get(clients.get(server_num), kl.build());
+                    break;
+                case SLEEP:
+                default:
+                    break;
             }
         }
 

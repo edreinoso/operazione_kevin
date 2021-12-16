@@ -1,19 +1,3 @@
-/*
- * Copyright 2015 The gRPC Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.kevin;
 
 import io.grpc.ManagedChannel;
@@ -67,8 +51,7 @@ public class KeyValServer {
         TimeUnit.SECONDS.sleep(4);
 
         ArrayList<ManagedChannel> arr = new ArrayList<>();
-        for (int i = 0; i < conf.get_targets().size(); ++i)
-        {
+        for (int i = 0; i < conf.get_targets().size(); ++i) {
             if (i == conf.get_my_idx())
                 continue;
             String target = conf.get_targets().get(i);
@@ -102,7 +85,7 @@ public class KeyValServer {
         int my_idx = Integer.parseInt(args[1]);
 
         TopoConf conf;
-        try{
+        try {
             conf = new TopoConf(topo_file_name, my_idx);
         } catch (Exception e) {
             e.printStackTrace();
@@ -148,12 +131,10 @@ public class KeyValServer {
         @Override
         public void setVal(KeyVal kv, StreamObserver<Val> responseObserver) {
             mtx.lock();
-            if (!batch_logs.containsKey(kv.getId()))
-            {
+            if (!batch_logs.containsKey(kv.getId())) {
                 batch_logs.put(kv.getId(), new LinkedBlockingQueue<>());
             }
-            if (!committed.containsKey(kv.getId()))
-            {
+            if (!committed.containsKey(kv.getId())) {
                 committed.put(kv.getId(), false);
             }
             batch_logs.get(kv.getId()).add(kv);
@@ -179,6 +160,11 @@ public class KeyValServer {
 
         @Override
         public void setCommit(Val id, StreamObserver<Val> responseObserver) {
+            logger.info("setCommit request");
+            if (leader) {
+                logger.info("we are leaders");
+            }
+
             long cl_id = id.getV();
             mtx.lock();
             committed.put(cl_id, true);
@@ -191,9 +177,10 @@ public class KeyValServer {
 
         @Override
         public void getVal(KeyList kl, StreamObserver<MaybeValList> responseObserver) {
+            logger.info("getVal received");
+
             MaybeValList.Builder mvl = MaybeValList.newBuilder();
-            if (!leader)
-            {
+            if (!leader) {
                 System.err.println("Non-coordinator received get -- impossible case");
 
                 responseObserver.onNext(mvl.build());
@@ -205,15 +192,11 @@ public class KeyValServer {
 
             coord2PC(kl.getId());
 
-            for (Key k : kl.getKList())
-            {
-                if (HT.containsKey(k.getK()))
-                {
+            for (Key k : kl.getKList()) {
+                if (HT.containsKey(k.getK())) {
                     long ht_v = HT.get(k.getK());
                     mvl.addVal(MaybeVal.newBuilder().setVal(Val.newBuilder().setV(ht_v)).build());
-                }
-                else
-                {
+                } else {
                     mvl.addVal(MaybeVal.newBuilder().build());
                 }
             }
@@ -229,10 +212,8 @@ public class KeyValServer {
             ArrayList<KeyVal> arg = new ArrayList<>();
             ArrayList<Long> ids = new ArrayList<>();
 
-            for (Map.Entry<Long, LinkedBlockingQueue<KeyVal>> e : batch_logs.entrySet())
-            {
-                if (!committed.containsKey(e.getKey()) || !committed.get(e.getKey()))
-                {
+            for (Map.Entry<Long, LinkedBlockingQueue<KeyVal>> e : batch_logs.entrySet()) {
+                if (!committed.containsKey(e.getKey()) || !committed.get(e.getKey())) {
                     // skip uncommitted batches
                     continue;
                 }
@@ -250,8 +231,7 @@ public class KeyValServer {
             }
 
             // TODO: try to avoid removing this while blocked
-            for (Long iD : ids)
-            {
+            for (Long iD : ids) {
                 batch_logs.remove(iD);
                 committed.remove(iD);
             }
@@ -271,16 +251,13 @@ public class KeyValServer {
             ArrayList<Long> ids = new ArrayList<>();
 
             // TODO: try to avoid removing this while blocked
-            for (Map.Entry<Long, LinkedBlockingQueue<KeyVal>> e : batch_logs.entrySet())
-            {
-                if (committed.containsKey(e.getKey()))
-                {
+            for (Map.Entry<Long, LinkedBlockingQueue<KeyVal>> e : batch_logs.entrySet()) {
+                if (committed.containsKey(e.getKey())) {
                     ids.add(e.getKey());
                 }
             }
 
-            for (Long iD : ids)
-            {
+            for (Long iD : ids) {
                 batch_logs.remove(iD);
                 committed.remove(iD);
             }
