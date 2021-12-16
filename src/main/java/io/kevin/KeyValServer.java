@@ -178,6 +178,10 @@ public class KeyValServer {
         @Override
         public void setCommit(Val id, StreamObserver<Val> responseObserver) {
             logger.info("setCommit request");
+            if (leader) {
+                logger.info("we are leaders");
+            }
+
             long cl_id = id.getV();
             mtx.lock();
             committed.put(cl_id, true);
