@@ -130,6 +130,7 @@ public class KeyValServer {
 
         @Override
         public void setVal(KeyVal kv, StreamObserver<Val> responseObserver) {
+            logger.info("setVal received");
             mtx.lock();
             if (!batch_logs.containsKey(kv.getId())) {
                 batch_logs.put(kv.getId(), new LinkedBlockingQueue<>());
