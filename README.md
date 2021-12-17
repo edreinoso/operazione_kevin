@@ -19,5 +19,5 @@ sh start.sh
 
 ### kill servers at the end
 ```
-ps aux | grep -ie java | awk '{print $1}'  | xargs kill -9
+ps aux | grep -ie java | awk '{print $2}'  | xargs kill -9
 ```
